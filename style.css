@@ -1,0 +1,83 @@
+.game-screen {
+    display: none; /* Oculta todas las pantallas por defecto */
+    text-align: center;
+}
+.game-screen.active {
+    display: block; /* Muestra la pantalla activa */
+}
+#gameCanvas {
+    /* Define un tamaño estándar si no está en HTML */
+    width: 800px; 
+    height: 600px;
+    border: 2px solid green;
+    background-size: cover; /* Asegura que la imagen cubra todo el canvas */
+    background-position: center;
+    transition: background-image 0.5s ease-in-out; /* Animación suave al cambiar */
+}
+
+/* Clases de Fondo para cada Mundo */
+.bg-TierraAire {
+    background-image: url('assets/img/tierra_aire.jpg'); /* Edificio urbano, cielo con nubes */
+}
+.bg-TierraSinAire {
+    background-image: url('assets/img/tierra_sin_aire.jpg'); /* Cielo de día limpio */
+}
+.bg-Luna {
+    background-image: url('assets/img/luna.jpg'); /* Paisaje lunar y estrellas */
+}
+.bg-Agua {
+    background-image: url('assets/img/agua.jpg'); /* Fondo submarino o azul oscuro */
+}
+.bg-Jupiter {
+    background-image: url('assets/img/jupiter.jpg'); /* Bandas de Júpiter y cielo gaseoso */
+}
+.bg-Personalizado {
+    background-image: url('assets/img/personalizado.jpg'); /* Fondo abstracto o pizarra limpia */
+}
+.controls-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 15px;
+    max-width: 600px;
+    margin: 20px auto;
+}
+/* Estilos para que parezca una pizarra como en las imágenes de la propuesta */
+body {
+    background-color: #333;
+    color: white;
+    font-family: sans-serif;
+}
+
+/* Estilos para el Modal */
+.modal {
+    display: none; /* Oculto por defecto */
+    position: fixed; 
+    z-index: 10; /* Superior a todo */
+    left: 0;
+    top: 0;
+    width: 100%; 
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.8); /* Fondo oscuro */
+}
+.modal-content {
+    background-color: #444;
+    margin: 10% auto; 
+    padding: 20px;
+    border: 3px solid #00c77a; /* Verde como la pizarra */
+    width: 80%;
+    max-width: 900px;
+    position: relative;
+}
+.close-button {
+    color: #aaa;
+    float: right;
+    font-size: 28px;
+    font-weight: bold;
+}
+.close-button:hover,
+.close-button:focus {
+    color: white;
+    text-decoration: none;
+    cursor: pointer;
+}
