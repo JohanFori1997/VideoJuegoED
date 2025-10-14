@@ -347,27 +347,6 @@ function drawGame() {
         ctx.fillStyle = 'blue';
         ctx.fillText('TIRADOR (Cargando...)', 50, CANVAS_HEIGHT - 20);
     }
-
-    // -----------------------------------------------------------
-
-    // 4. Dibujar el Objeto en Caída
-    // if (gameState.objeto.cayendo || gameState.objeto.tiempo > 0) {
-    //     // La posición y_max debe ser la altura inicial (y0)
-    //     const y_pixel = worldToCanvasY(gameState.objeto.y, gameState.y0);
-
-    //     // Objeto (Círculo simple que representa la masa)
-    //     ctx.fillStyle = 'yellow';
-    //     ctx.beginPath();
-    //     ctx.arc(canvas.width / 2, y_pixel, 10, 0, Math.PI * 2);
-    //     ctx.fill();
-
-    //     // Línea de la trayectoria
-    //     ctx.strokeStyle = '#fff';
-    //     ctx.beginPath();
-    //     ctx.moveTo(canvas.width / 2, 0);
-    //     ctx.lineTo(canvas.width / 2, y_pixel);
-    //     ctx.stroke();
-    // }
 }
 
 // =========================================================================
