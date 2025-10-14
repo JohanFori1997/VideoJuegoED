@@ -1,15 +1,16 @@
 // =========================================================================
 // game.js - CONFIGURACIÓN GLOBAL Y ESTRUCTURAS DE DATOS
 // =========================================================================
-
+const CANVAS_HEIGHT = 600;
+const TIME_STEP = 0.01; // dt (paso de tiempo para la integración RK4)
 // Definición de constantes para los escenarios (Requisito: Contextos de Simulación)
 const WORLD_SETTINGS = {
-    'TierraAire':      { g: 9.8, k: 0.05, modelo: 'lineal', descripcion: 'Resistencia del aire moderada' },
-    'TierraSinAire':   { g: 9.8, k: 0.0, modelo: 'galileo', descripcion: 'Modelo ideal (sin fricción)' },
-    'Luna':            { g: 1.62, k: 0.0, modelo: 'galileo', descripcion: 'Baja gravedad, sin fricción' },
-    'Agua':            { g: 9.8, k: 5.0, modelo: 'lineal', descripcion: 'Alta viscosidad (modelo lineal)' },
-    'Jupiter':         { g: 24.79, k: 0.1, modelo: 'cuadratico', descripcion: 'Alta gravedad y fricción (alta velocidad)' },
-    'Personalizado':   { g: 9.8, k: 0.0, modelo: 'lineal', descripcion: 'Configuración manual de variables' }
+    'TierraAire': { g: 9.8, k: 0.05, modelo: 'lineal', descripcion: 'Resistencia del aire moderada' },
+    'TierraSinAire': { g: 9.8, k: 0.0, modelo: 'galileo', descripcion: 'Modelo ideal (sin fricción)' },
+    'Luna': { g: 1.62, k: 0.0, modelo: 'galileo', descripcion: 'Baja gravedad, sin fricción' },
+    'Agua': { g: 9.8, k: 5.0, modelo: 'lineal', descripcion: 'Alta viscosidad (modelo lineal)' },
+    'Jupiter': { g: 24.79, k: 0.1, modelo: 'cuadratico', descripcion: 'Alta gravedad y fricción (alta velocidad)' },
+    'Personalizado': { g: 9.8, k: 0.0, modelo: 'lineal', descripcion: 'Configuración manual de variables' }
 };
 
 let gameState = {
@@ -20,12 +21,70 @@ let gameState = {
     masa: 0.1,         // Masa del objeto (kg). Nota: 100g de input se convierte a 0.1kg
     y0: 100,           // Altura inicial (m)
     v0: 0,             // Velocidad inicial (m/s)
-    objeto: { x: 0, y: 0, v: 0, tiempo: 0, cayendo: false }
+    objeto: { x: 0, y: 0, v: 0, tiempo: 0, cayendo: false },
+    cayendo: false,
+    impactado: false
 };
 
+// Poses de apuntado del soldado
+const shooterFrontImage = new Image();
+shooterFrontImage.src = 'assets/Sprites/Sprite1-frente.png'; // Ruta a la imagen de 159x188
+
+const shooterUpImage = new Image();
+shooterUpImage.src = 'assets/Sprites/Sprite1-up.png'; // Ruta a la imagen de 101x219
+
+// --- Dimensiones de las Poses (Necesarias para el dibujo estático) ---
+const FRONT_WIDTH = 159;
+const FRONT_HEIGHT = 188;
+
+const UP_WIDTH = 101;
+const UP_HEIGHT = 219;
+
+// Usaremos la pose más alta (UP_HEIGHT) para definir la posición Y del soldado en el suelo
+const SOLDIER_HEIGHT = UP_HEIGHT;
+const SOLDIER_WIDTH = FRONT_WIDTH; // Usaremos el ancho de la pose frontal como referencia
+
+// --- Constantes de Posición del Tirador en el Canvas (Estática) ---
+const SHOOTER_CANVAS_X = 100;
+const SHOOTER_CANVAS_Y = CANVAS_HEIGHT - SOLDIER_HEIGHT;
+
+// 1. Ladrón en Caída (el objeto que reemplaza al punto amarillo)
+const thiefFallingImage = new Image();
+thiefFallingImage.src = 'assets/Sprites/Sprite2-Cayendo.png'; 
+
+// 2. Ladrón Estático (colgado en el edificio al inicio de la partida)
+const thiefClimbingImage = new Image();
+thiefClimbingImage.src = 'assets/Sprites/Sprite2-Colgado.png'; 
+
+// 3. Ladrón en el Suelo (Nueva Imagen)
+const thiefImpactImage = new Image();
+thiefImpactImage.src = 'assets/img/thief_impact.png';
+// --- Dimensiones del Ladrón ---
+
+// Dimensiones de la pose de CAÍDA (Objeto que se mueve)
+const FALLING_WIDTH = 140;
+const FALLING_HEIGHT = 147;
+
+// Dimensiones de la pose ESTÁTICA/COLGADA (En el edificio)
+const CLIMBING_WIDTH = 91;
+const CLIMBING_HEIGHT = 154;
+
+const IMPACT_WIDTH = 300; // Ajusta a la dimensión real de tu sprite de impacto
+const IMPACT_HEIGHT = 300;
+// --- Constante de Control del Mouse ---
+// Umbral de altura en píxeles para cambiar de pose.
+// Si el mouse está por encima de esta línea, el soldado apunta hacia arriba.
+const UP_THRESHOLD_Y = CANVAS_HEIGHT * 0.7;
+
+// Altura del suelo del mundo real (y_world = 0) en píxeles.
+const GROUND_Y_PIXEL = 600; // Asumiendo CANVAS_HEIGHT = 600
+
+let shooterDirection = 0;
+
+let mouseX = 0;
+let mouseY = 0;
+
 let simulationHistory = [];
-const CANVAS_HEIGHT = 600;
-const TIME_STEP = 0.01; // dt (paso de tiempo para la integración RK4)
 
 // Referencias del DOM (Declaradas globalmente para acceso en todas las funciones)
 const canvas = document.getElementById('gameCanvas');
@@ -38,8 +97,8 @@ const btnVerGrafico = document.getElementById('btn-ver-grafico');
 const thiefImage = new Image();
 thiefImage.src = 'assets/img/thief.png'; // RUTA A TU IMAGEN DEL LADRÓN
 
-const shooterImage = new Image();
-shooterImage.src = 'assets/img/shooter.png'; // RUTA A TU IMAGEN DEL TIRADOR
+// const shooterImage = new Image();
+// shooterImage.src = 'assets/img/shooter.png'; // RUTA A TU IMAGEN DEL TIRADOR
 
 // Dimensiones esperadas para las imágenes (ajusta según el tamaño real de tus archivos)
 const THIEF_WIDTH = 50;
@@ -59,16 +118,16 @@ function getAcceleration(v) {
     const g = gameState.g;
     const k = gameState.k;
     const modelo = WORLD_SETTINGS[gameState.selectedWorld]?.modelo || 'lineal';
-    
-    let a = g; 
+
+    let a = g;
 
     // Fuerza de arrastre (resistencia)
     if (modelo === 'lineal' || modelo === 'TierraAire' || modelo === 'Agua') {
-        a -= (k / m) * v; 
+        a -= (k / m) * v;
     } else if (modelo === 'cuadratico' || modelo === 'Jupiter') {
-        a -= (k / m) * v * Math.abs(v); 
-    } 
-    
+        a -= (k / m) * v * Math.abs(v);
+    }
+
     return a;
 }
 
@@ -78,15 +137,15 @@ function getAcceleration(v) {
 function rungeKutta4() {
     let obj = gameState.objeto;
     const dt = TIME_STEP;
-    
+
     // RK4 para la Velocidad (v)
     let k1_v = getAcceleration(obj.v);
     let k2_v = getAcceleration(obj.v + 0.5 * dt * k1_v);
     let k3_v = getAcceleration(obj.v + 0.5 * dt * k2_v);
     let k4_v = getAcceleration(obj.v + dt * k3_v);
-    
+
     obj.v += (dt / 6.0) * (k1_v + 2 * k2_v + 2 * k3_v + k4_v);
-    
+
     // Actualizar Posición (y)
     let delta_y = obj.v * dt;
     obj.y -= delta_y; // 'y' se reduce al caer (medida desde el inicio)
@@ -149,74 +208,166 @@ function worldToCanvasY(y_world, y_max) {
  */
 function drawGame() {
     if (!ctx) return;
-    
+
     // El fondo se gestiona por CSS, solo limpiamos el área de dibujo
-    ctx.clearRect(0, 0, canvas.width, canvas.height); 
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Suelo (Asegura que el ladrón impactado se dibuje JUSTO encima de esta línea)
+    ctx.fillStyle = '#0a0'; 
+    ctx.fillRect(0, CANVAS_HEIGHT - 10, canvas.width, 10);
 
     // 1. Dibujar el Edificio (Ejemplo Simple)
-    ctx.fillStyle = '#666';
-    ctx.fillRect(canvas.width / 2 - 50, 0, 100, CANVAS_HEIGHT);
+    // ctx.fillStyle = '#666';
+    // ctx.fillRect(canvas.width / 2 - 50, 0, 100, CANVAS_HEIGHT);
 
     // -----------------------------------------------------------
-    // 2. DIBUJAR AL LADRÓN (IMAGEN)
+    // 2. DIBUJAR AL LADRÓN ESTÁTICO (SOLO ANTES DEL DISPARO)
     // -----------------------------------------------------------
-    // Posición Y del Ladrón: Cerca de la parte superior del edificio
-    const thief_y_pixel = worldToCanvasY(gameState.y0, gameState.y0); 
     
-    // Aseguramos que la imagen se haya cargado antes de dibujarla
-    if (thiefImage.complete && thiefImage.naturalWidth !== 0) {
-        ctx.drawImage(
-            thiefImage,
-            canvas.width / 2 + 10, // Un poco a la derecha del edificio
-            thief_y_pixel - THIEF_HEIGHT, // La base del ladrón estará en esa línea y
-            THIEF_WIDTH,
-            THIEF_HEIGHT
-        );
-    } else {
-        // Fallback si la imagen no carga (mantener el texto)
-        ctx.fillStyle = 'red';
-        ctx.font = '20px Arial';
-        ctx.fillText('LADRÓN 💰', canvas.width / 2 - 40, thief_y_pixel);
+    // La imagen del ladrón COLGANDO/ESCALANDO aparece solo si NO está cayendo
+    if (!gameState.objeto.cayendo && !gameState.objeto.impactado) {
+        
+        const climbing_y_pixel = worldToCanvasY(gameState.y0, gameState.y0);
+        
+        if (thiefClimbingImage.complete && thiefClimbingImage.naturalWidth !== 0) {
+            ctx.drawImage(
+                thiefClimbingImage,
+                canvas.width / 2 + 10, // Un poco a la derecha del edificio
+                climbing_y_pixel - CLIMBING_HEIGHT, // Base del sprite en la línea y0
+                CLIMBING_WIDTH,
+                CLIMBING_HEIGHT
+            );
+        } else {
+            // Fallback si la imagen no carga
+            ctx.fillStyle = 'red';
+            ctx.font = '20px Arial';
+            ctx.fillText('LADRÓN (Cargando)', canvas.width / 2 - 40, climbing_y_pixel);
+        }
     }
+    
+    // -----------------------------------------------------------
+    // 3. DIBUJAR AL LADRÓN EN CAÍDA (Reemplaza el punto amarillo)
+    // -----------------------------------------------------------
+    if (gameState.objeto.cayendo) {
+        
+        const y_pixel = worldToCanvasY(gameState.objeto.y, gameState.y0);
 
+        if (thiefFallingImage.complete && thiefFallingImage.naturalWidth !== 0) {
+            
+            // Dibujar la imagen del ladrón cayendo
+            ctx.drawImage(
+                thiefFallingImage,
+                canvas.width / 2 - FALLING_WIDTH / 2, // Centrar la imagen en X
+                y_pixel - FALLING_HEIGHT / 2, // Centrar la imagen en Y (para que el centro sea el punto de cálculo)
+                FALLING_WIDTH,
+                FALLING_HEIGHT
+            );
+        } else {
+            // Fallback: dibujar el círculo amarillo si la imagen no carga
+            ctx.fillStyle = 'yellow';
+            ctx.beginPath();
+            ctx.arc(canvas.width / 2, y_pixel, 10, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+    // -----------------------------------------------------------
+    // 4. DIBUJAR AL LADRÓN IMPACTADO (NUEVA LÓGICA)
+    // -----------------------------------------------------------
+    if (gameState.objeto.impactado) {
+        
+        // Posición Y en el suelo (CANVAS_HEIGHT)
+        const impact_y_pixel = CANVAS_HEIGHT - 10; 
+
+        if (thiefImpactImage.complete && thiefImpactImage.naturalWidth !== 0) {
+            
+            // --- CÓDIGO CORREGIDO ---
+            const drawX = canvas.width / 2 - IMPACT_WIDTH / 2; // Centrado en X
+            const drawY = impact_y_pixel - IMPACT_HEIGHT;      // <-- ESTA ES LA CLAVE: 
+                                                               // Restamos la altura total de la imagen del suelo.
+
+            ctx.drawImage(
+                thiefImpactImage,
+                drawX, // Posición X (Centrado)
+                drawY, // Posición Y (Base de la imagen en el suelo)
+                IMPACT_WIDTH,
+                IMPACT_HEIGHT
+            );
+        }
+        // ... (Fallback si la imagen no carga) ...
+    }
     // -----------------------------------------------------------
     // 3. DIBUJAR AL TIRADOR (IMAGEN)
     // -----------------------------------------------------------
     // Posición del Tirador: Abajo a la izquierda
-    if (shooterImage.complete && shooterImage.naturalWidth !== 0) {
-        ctx.drawImage(
-            shooterImage,
-            50, // Posición X (cerca de la izquierda)
-            CANVAS_HEIGHT - SHOOTER_HEIGHT, // Base del tirador en el suelo
-            SHOOTER_WIDTH,
-            SHOOTER_HEIGHT
-        );
+    if (shooterUpImage.complete && shooterUpImage.naturalWidth !== 0) {
+
+        // Mapeo de la hoja de sprites para 'Sprite1.jpg':
+        let sx = 0; // Coordenada X de recorte de la fuente
+        let sy = 0; // Coordenada Y de recorte de la fuente
+
     } else {
         // Fallback si la imagen no carga
         ctx.fillStyle = 'blue';
         ctx.fillText('TIRADOR', 50, CANVAS_HEIGHT - 20);
     }
-    
+
+    let imageToDraw;
+    let currentWidth;
+    let currentHeight;
+
+    // Si el mouse está en el cuadrante superior (por encima del umbral Y), apuntar arriba.
+    if (mouseY < UP_THRESHOLD_Y) {
+        imageToDraw = shooterUpImage;
+        currentWidth = UP_WIDTH;
+        currentHeight = UP_HEIGHT;
+    } else {
+        // Si el mouse está en el cuadrante inferior, apuntar al frente.
+        imageToDraw = shooterFrontImage;
+        currentWidth = FRONT_WIDTH;
+        currentHeight = FRONT_HEIGHT;
+    }
+
+    if (imageToDraw.complete && imageToDraw.naturalWidth !== 0) {
+
+        // Ajuste de la posición Y para que los pies queden en el mismo lugar: 
+        // Siempre dibujamos la imagen actual en la posición y estática,
+        // y la diferencia de altura se maneja automáticamente.
+        const drawX = SHOOTER_CANVAS_X - currentWidth / 2; // Centrado
+        const drawY = SHOOTER_CANVAS_Y + (SOLDIER_HEIGHT - currentHeight); // Ajuste de pies
+
+        ctx.drawImage(
+            imageToDraw,
+            drawX,
+            drawY,
+            currentWidth,
+            currentHeight
+        );
+    } else {
+        // Fallback si la imagen no carga
+        ctx.fillStyle = 'blue';
+        ctx.fillText('TIRADOR (Cargando...)', 50, CANVAS_HEIGHT - 20);
+    }
+
     // -----------------------------------------------------------
 
     // 4. Dibujar el Objeto en Caída
-    if (gameState.objeto.cayendo || gameState.objeto.tiempo > 0) {
-        // La posición y_max debe ser la altura inicial (y0)
-        const y_pixel = worldToCanvasY(gameState.objeto.y, gameState.y0);
+    // if (gameState.objeto.cayendo || gameState.objeto.tiempo > 0) {
+    //     // La posición y_max debe ser la altura inicial (y0)
+    //     const y_pixel = worldToCanvasY(gameState.objeto.y, gameState.y0);
 
-        // Objeto (Círculo simple que representa la masa)
-        ctx.fillStyle = 'yellow';
-        ctx.beginPath();
-        ctx.arc(canvas.width / 2, y_pixel, 10, 0, Math.PI * 2);
-        ctx.fill();
+    //     // Objeto (Círculo simple que representa la masa)
+    //     ctx.fillStyle = 'yellow';
+    //     ctx.beginPath();
+    //     ctx.arc(canvas.width / 2, y_pixel, 10, 0, Math.PI * 2);
+    //     ctx.fill();
 
-        // Línea de la trayectoria
-        ctx.strokeStyle = '#fff';
-        ctx.beginPath();
-        ctx.moveTo(canvas.width / 2, 0);
-        ctx.lineTo(canvas.width / 2, y_pixel);
-        ctx.stroke();
-    }
+    //     // Línea de la trayectoria
+    //     ctx.strokeStyle = '#fff';
+    //     ctx.beginPath();
+    //     ctx.moveTo(canvas.width / 2, 0);
+    //     ctx.lineTo(canvas.width / 2, y_pixel);
+    //     ctx.stroke();
+    // }
 }
 
 // =========================================================================
@@ -241,10 +392,10 @@ function changeScreen(newScreen) {
  * Función para actualizar los datos en tiempo real (DEBE SER GLOBAL)
  */
 function updateDataDisplay() {
-    const yMax = gameState.y0; 
-    
+    const yMax = gameState.y0;
+
     document.getElementById('data-velocidad').textContent = gameState.objeto.v.toFixed(2);
-    
+
     // Altura sobre el suelo = y_max - y_actual
     const altura_sobre_suelo = yMax - gameState.objeto.y;
 
@@ -257,18 +408,18 @@ function updateDataDisplay() {
  */
 function handleShot(event) {
     if (!gameState.objeto.cayendo && gameState.currentScreen === 'game') {
-        
+
         // Reiniciar variables
-        gameState.objeto.y = gameState.y0; 
-        gameState.objeto.v = gameState.v0; 
+        gameState.objeto.y = gameState.y0;
+        gameState.objeto.v = gameState.v0;
         gameState.objeto.tiempo = 0;
-        
+
         simulationHistory = []; // ¡LIMPIAR HISTORIAL!
-        
+
         gameState.objeto.cayendo = true;
-        
-        gameState.objeto.x = canvas.width / 2; 
-        
+
+        gameState.objeto.x = canvas.width / 2;
+
         // Deshabilitar la validación hasta que termine la caída
         document.getElementById('btn-validar-vt').disabled = true;
         document.getElementById('vt-resultado').textContent = ''; // Limpiar resultado anterior
@@ -287,12 +438,12 @@ function gameLoop() {
     if (gameState.objeto.cayendo) {
         if (gameState.objeto.y > 0) {
             rungeKutta4();
-            
+
             // RECOLECCIÓN DE DATOS para el gráfico (cada 10 pasos de tiempo)
             if (Math.floor(gameState.objeto.tiempo * 100) % 10 === 0) {
-                simulationHistory.push({ 
-                    t: gameState.objeto.tiempo, 
-                    v: gameState.objeto.v 
+                simulationHistory.push({
+                    t: gameState.objeto.tiempo,
+                    v: gameState.objeto.v
                 });
             }
 
@@ -300,25 +451,26 @@ function gameLoop() {
             // Detener la caída
             gameState.objeto.cayendo = false;
             gameState.objeto.y = 0; // Posición final (el suelo)
+            gameState.objeto.impactado = true;
             document.getElementById('btn-validar-vt').disabled = false;
-            
+
             // Asegurarse de que el último punto se añade al historial si no está ya
             if (simulationHistory.length > 0 && simulationHistory[simulationHistory.length - 1].t !== gameState.objeto.tiempo) {
-                 simulationHistory.push({ t: gameState.objeto.tiempo, v: gameState.objeto.v });
+                simulationHistory.push({ t: gameState.objeto.tiempo, v: gameState.objeto.v });
             }
-            alert(`Caída Terminada. Tiempo total: ${gameState.objeto.tiempo.toFixed(2)} s`); 
+            alert(`Caída Terminada. Tiempo total: ${gameState.objeto.tiempo.toFixed(2)} s`);
         }
-        
+
         // 2. Renderizado (Drawing) y Actualización de la Interfaz
-        drawGame(); 
+        drawGame();
         updateDataDisplay();
-    } 
+    }
     // Siempre dibujamos la pantalla de juego si es la activa, incluso si el objeto no cae
     else if (gameState.currentScreen === 'game') {
-        drawGame(); 
-        updateDataDisplay(); 
+        drawGame();
+        updateDataDisplay();
     }
-    
+
     requestAnimationFrame(gameLoop);
 }
 
@@ -334,29 +486,29 @@ function generateComparativeData(totalTime) {
     const simulatedData = [];
     const galileoData = [];
     const Vt_analytic = calculateTerminalVelocity();
-    
+
     const m = gameState.masa;
     const g = gameState.g;
     const k = gameState.k;
     const modelo = WORLD_SETTINGS[gameState.selectedWorld]?.modelo || 'lineal';
-    
+
     // Usamos el historial recolectado (simulación numérica RK4)
     simulationHistory.forEach(point => {
         labels.push(point.t.toFixed(1));
         simulatedData.push(point.v);
         // Curva Galileo
-        galileoData.push(g * point.t + gameState.v0); 
+        galileoData.push(g * point.t + gameState.v0);
     });
-    
+
     // Si no hay historial (ejecutar caída por primera vez), usamos la solución analítica
     if (simulationHistory.length === 0) {
         let time = 0;
         const dt = 0.1;
-        
-        while (time <= totalTime * 1.5) { 
+
+        while (time <= totalTime * 1.5) {
             labels.push(time.toFixed(1));
-            galileoData.push(g * time + gameState.v0); 
-            
+            galileoData.push(g * time + gameState.v0);
+
             // Usar la solución analítica correspondiente
             if (modelo === 'lineal' || modelo === 'TierraAire' || modelo === 'Agua') {
                 simulatedData.push(v_t_lineal(time, m, g, k));
@@ -378,13 +530,13 @@ function generateComparativeData(totalTime) {
 function renderVelocityChart(labels, simulatedData, galileoData, Vt_analytic) {
     let chartCanvas = document.getElementById('velocityChart');
     if (!chartCanvas) return;
-    
+
     if (window.velocityChartInstance) {
         window.velocityChartInstance.destroy();
     }
 
     const ctxChart = chartCanvas.getContext('2d');
-    
+
     window.velocityChartInstance = new Chart(ctxChart, {
         type: 'line',
         data: {
@@ -431,27 +583,73 @@ function renderVelocityChart(labels, simulatedData, galileoData, Vt_analytic) {
     });
 }
 
+function calculateShooterDirection() {
+    // Usamos el punto de disparo (el arma) como origen
+    const originX = SHOOTER_CANVAS_X; // Estimar el centro del soldado
+    const originY = SHOOTER_CANVAS_Y + (DRAW_HEIGHT / 2);
+
+    // Calcular el vector del soldado al mouse
+    const dx = mouseX - originX;
+    const dy = mouseY - originY;
+
+    // Calcular el ángulo en radianes y luego en grados
+    let angleRad = Math.atan2(dy, dx);
+    let angleDeg = angleRad * (180 / Math.PI);
+
+    // Mapeamos el ángulo para apuntar hacia la parte superior derecha (0° a -90°)
+    // El tirador está a la izquierda del ladrón, por lo que solo nos interesa el cuadrante superior derecho
+    angleDeg = Math.abs(angleDeg); // Convertimos el ángulo negativo (hacia arriba) a positivo (0 a 180)
+
+    // 1. Limitar el ángulo (no puede apuntar hacia abajo/izquierda)
+    if (angleDeg > 90) {
+        angleDeg = 90; // Máximo 90 grados (apuntando recto hacia arriba)
+    }
+
+    // 2. Mapear el ángulo (0° a 90°) a un índice de sprite (0 a 4)
+    // El sprite sheet tiene 5 poses principales: 0°, 20°, 45°, 75°, 90°.
+
+    if (angleDeg >= 80) {
+        shooterDirection = 0; // Cerca de 90° (Arriba)
+    } else if (angleDeg >= 60) {
+        shooterDirection = 1; // 75° (Diagonal Alta)
+    } else if (angleDeg >= 35) {
+        shooterDirection = 2; // 45° (Diagonal Media)
+    } else if (angleDeg >= 10) {
+        shooterDirection = 3; // 20° (Diagonal Baja)
+    } else {
+        shooterDirection = 4; // Cerca de 0° (Derecha)
+    }
+}
+
 // =========================================================================
 // INICIALIZACIÓN DE EVENTOS (Asegura que el DOM está cargado)
 // =========================================================================
 
 document.addEventListener('DOMContentLoaded', () => {
     // Iniciar el gameLoop
-    gameLoop(); 
-    
+    gameLoop();
+
     // --- 1. Eventos de Selección de Mundo (Pantalla 1) ---
-    document.querySelectorAll('#world-options button').forEach(button => {
+    const worldButtons = document.querySelectorAll('#world-options button');
+
+    worldButtons.forEach(button => {
         button.addEventListener('click', (e) => {
+            // 1. Limpiar la clase 'selected' de todos los botones para deseleccionar el anterior
+            worldButtons.forEach(b => b.classList.remove('selected'));
+
+            // 2. Establecer el mundo actual y marcar el botón como seleccionado
             gameState.selectedWorld = e.target.dataset.world;
-            document.querySelectorAll('#world-options button').forEach(b => b.classList.remove('selected'));
-            e.target.classList.add('selected'); 
+            e.target.classList.add('selected'); // Opcional, pero útil para UX
+
+            // 3. Habilitar el botón INICIAR
             btnIniciar.disabled = false;
         });
     });
 
     btnIniciar.addEventListener('click', () => {
+        // La lógica de INICIAR (pasar a la configuración)
         const settings = WORLD_SETTINGS[gameState.selectedWorld];
-        
+
         // Cargar y Habilitar/Deshabilitar inputs
         document.getElementById('input-gravedad').value = settings.g;
         document.getElementById('input-resistencia').value = settings.k;
@@ -459,8 +657,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const isCustom = gameState.selectedWorld === 'Personalizado';
         document.getElementById('input-gravedad').disabled = !isCustom;
         document.getElementById('input-resistencia').disabled = !isCustom;
-        
-        changeScreen('config'); 
+
+        changeScreen('config'); // Mover a la pantalla de configuración
     });
 
     // --- 2. Evento de Comienzo del Juego (Pantalla 2) ---
@@ -480,27 +678,27 @@ document.addEventListener('DOMContentLoaded', () => {
         changeScreen('game');
 
         // 1. Limpiar todas las clases 'bg-' anteriores
-    canvas.className = ''; 
-    
-    // 2. Aplicar la nueva clase de fondo según el mundo seleccionado
-    if (gameState.selectedWorld) {
-        canvas.classList.add(`bg-${gameState.selectedWorld}`);
-    }
+        canvas.className = '';
+
+        // 2. Aplicar la nueva clase de fondo según el mundo seleccionado
+        if (gameState.selectedWorld) {
+            canvas.classList.add(`bg-${gameState.selectedWorld}`);
+        }
         // Inicializa el dibujo de la partida estática (antes del disparo)
-        gameState.objeto.y = gameState.y0; 
+        gameState.objeto.y = gameState.y0;
         gameState.objeto.v = gameState.v0;
         gameState.objeto.tiempo = 0;
         updateDataDisplay();
-        drawGame(); 
+        drawGame();
     });
-    
+
     // --- 3. Eventos de la Partida (Pantalla 3) ---
-    
+
     // Listener de Disparo: Al hacer clic en el Canvas, se llama a handleShot
     if (canvas) {
-        canvas.addEventListener('click', handleShot); 
+        canvas.addEventListener('click', handleShot);
     }
-    
+
     // Listener de Retorno
     document.getElementById('btn-volver-menu').addEventListener('click', () => {
         changeScreen('menu');
@@ -537,7 +735,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const maxTime = gameState.objeto.tiempo > 0 ? gameState.objeto.tiempo * 1.5 : 10;
             const { labels, simulatedData, galileoData, Vt_analytic } = generateComparativeData(maxTime);
             renderVelocityChart(labels, simulatedData, galileoData, Vt_analytic);
-            
+
             modalChart.style.display = 'block';
         });
     }
@@ -547,5 +745,17 @@ document.addEventListener('DOMContentLoaded', () => {
         closeChartBtn.addEventListener('click', () => {
             modalChart.style.display = 'none';
         });
+    }
+
+    // Listener para capturar la posición del mouse y calcular la dirección
+    if (canvas) {
+        canvas.addEventListener('mousemove', (event) => {
+            const rect = canvas.getBoundingClientRect();
+            mouseX = event.clientX - rect.left;
+            mouseY = event.clientY - rect.top;
+        });
+
+        // Listener de Disparo
+        canvas.addEventListener('click', handleShot);
     }
 });
