@@ -3,66 +3,98 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dispara al Ladrón - Simulador de Caída Libre</title>
+    <title>Dispara al Ladrón - Ecuaciones Diferenciales</title>
     <link rel="stylesheet" href="style.css">
-</head>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
+    </head>
 <body>
 
+<div class="container">
+    <h1>Dispara al Ladrón: Ecuaciones Diferenciales</h1>
+    
     <div id="screen-menu" class="game-screen active">
-        <h2>SELECCIONA TU MUNDO</h2>
+        <h2>1. SELECCIONA TU MUNDO</h2>
         <div id="world-options">
-            <button data-world="TierraAire">TIERRA (CON AIRE)</button>
-            <button data-world="Luna">LUNA</button>
-            <button data-world="Agua">AGUA</button>
-            <button data-world="TierraSinAire">TIERRA SIN AIRE</button>
-            <button data-world="Jupiter">JUPITER</button>
-            <button data-world="Personalizado">PERSONALIZADO</button>
+            <button data-world="TierraAire">Tierra (Con Aire)</button>
+            <button data-world="Luna">Luna</button>
+            <button data-world="Agua">Agua</button>
+            <button data-world="TierraSinAire">Tierra (Sin Aire)</button>
+            <button data-world="Jupiter">Júpiter</button>
+            <button data-world="Personalizado">Personalizado</button>
         </div>
-        <button id="btn-iniciar" disabled>INICIAR</button>
+        <button id="btn-iniciar" disabled>CONFIGURAR VARIABLES</button>
     </div>
 
     <div id="screen-config" class="game-screen">
-        <h2>Selecciona tus variables</h2>
-        <div class="controls-grid">
-            <label>MASA (g): <input type="number" id="input-masa" value="100"></label>
-            <label>ALTURA (m): <input type="number" id="input-altura" value="100"></label>
-            <label>GRAVEDAD (m/s²): <input type="number" id="input-gravedad" value="9.8" disabled></label>
-            <label>RESISTENCIA (k): <input type="number" id="input-resistencia" value="0.05" disabled></label>
-            <label>VELOCIDAD INICIAL (m/s): <input type="number" id="input-v0" value="0"></label>
-            </div>
-        <button id="btn-comenzar-juego">COMENZAR PARTIDA</button>
-    </div>
+        <h2>2. CONFIGURACIÓN DE ESCENARIO</h2>
+        
+        <label>Masa del objeto (g):</label>
+        <input type="number" id="input-masa" value="70" step="1" required><br>
+        
+        <label>Altura inicial (m):</label>
+        <input type="number" id="input-altura" value="100" step="1" required><br>
+        
+        <label>Velocidad Inicial (m/s):</label>
+        <input type="number" id="input-v0" value="0" step="0.1" required><br>
 
-    <div id="screen-game" class="game-screen">
-        <canvas id="gameCanvas" width="800" height="600"></canvas>
-        <div id="data-display">
-            <h4>DATOS OBJETO:</h4>
-            <p>Velocidad: <span id="data-velocidad">0.0</span> m/s</p>
-            <p>Altura: <span id="data-altura">0.0</span> m</p>
-            <p>Peso: <span id="data-peso">0.0</span> N</p>
-            
-            <div id="validation-area">
-                <input type="number" id="input-vt-usuario" placeholder="Vt calculada (m/s)">
-                <button id="btn-validar-vt">Validar Vt</button>
-                <p id="vt-resultado"></p>
-            </div>
-        </div>
-        <button id="btn-ver-grafico">Ver Gráfico de Análisis</button>
+        <h3>Variables del Mundo</h3>
+        <label>Gravedad (g):</label>
+        <input type="number" id="input-gravedad" value="9.81" step="0.01" disabled><br>
+        
+        <label>Constante de Resistencia (k):</label>
+        <input type="number" id="input-resistencia" value="0.000015" step="0.000001" disabled><br>
+        
+        <button id="btn-comenzar-juego">COMENZAR PARTIDA</button>
         <button id="btn-volver-menu">Volver al Menú</button>
     </div>
 
-    <div id="chart-modal" class="modal">
-        <div class="modal-content">
-            <span class="close-button" id="close-chart-modal">&times;</span>
-            <h3>Gráfico de Velocidad vs. Tiempo (v(t))</h3>
-            <canvas id="velocityChart" width="700" height="400"></canvas>
-            
-            <h4>Discusión:</h4>
-            <p>La curva "Modelo Simulado" (con Resistencia) se estabiliza a la Velocidad Terminal (Vt), mientras que el "Modelo Ideal (Galileo)" (sin fricción) continúa aumentando linealmente.</p>
+    <div id="screen-game" class="game-screen">
+        <h2>Dispara haciendo click en el objetivo para iniciar la caída</h2>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        
+        <div id="data-panel" style="margin-top: 20px; text-align: center;">
+            <p>Tiempo Transcurrido: <span id="data-tiempo">0.00 s</span></p>
+            <p>Velocidad Actual: <span id="data-velocidad">0.00 m/s</span></p>
+            <p>Altura sobre Suelo: <span id="data-altura">0.00 m</span></p>
+            <p>Peso (mg): <span id="data-peso">0.00 N</span></p>
         </div>
+
+        <div style="margin-top: 15px; padding: 10px; border: 1px solid #ccc; border-radius: 5px; text-align: center;">
+            <h4>Verificación de Velocidad Terminal ($\mathbf{V_T}$):</h4>
+            <label>Ingresa tu $V_T$ calculada:</label>
+            <input type="number" id="input-vt-usuario" step="0.0001" placeholder="Ej: 8.1429" style="width: 150px;">
+            <button id="btn-validar-vt" disabled>Validar</button>
+            <p id="vt-resultado" style="font-weight: bold; margin-top: 5px;"></p>
+        </div>
+        
+        <button id="btn-ver-grafico">Ver Gráfico de Análisis (Laplace/RK4)</button>
+        <button id="btn-volver-menu">Volver al Menú</button>
     </div>
-    
-    <script src="game.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+</div>
+
+<div id="chart-modal" class="modal">
+    <div class="modal-content">
+        <span class="close" id="close-chart-modal">&times;</span>
+        <h3>Gráfico Comparativo de Velocidad $v(t)$</h3>
+        <p>Contraste de los modelos de Ecuaciones Diferenciales.</p>
+        
+        <canvas id="velocityChart"></canvas>
+        
+        <hr>
+        <h4>Demostración del Poder Matemático:</h4>
+        <p><strong>Verificación de Laplace:</strong> La curva **Solución Analítica (Laplace)** se superpone al **Modelo Numérico (RK4)**. Esto verifica que nuestro método analítico fue correcto. La Transformada de Laplace nos permitió convertir la EDO lineal en una simple **ecuación algebraica** en el dominio de $s$, demostrando la **elegancia del método** para problemas de valores iniciales.</p>
+        
+        <p><strong>Análisis Discreto (Transformada Z):</strong> La curva **Modelo Discreto (Euler)** muestra el comportamiento de la solución si se resuelve mediante un método de diferencias finitas, análogo a la **Transformada Z** en sistemas discretos. La diferencia con la curva RK4 (azul) ilustra el error introducido por la discretización.</p>
+        
+        <p>Este enfoque refleja la evolución histórica de la física matemática, pasando de la aproximación de series a métodos formales poderosos, como los desarrollados por Laplace.</p>
+        <hr>
+        
+        <button id="close-chart-modal-btn">Cerrar</button>
+    </div>
+</div>
+
+<script src="game.js"></script>
+
 </body>
 </html>

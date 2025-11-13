@@ -43,9 +43,24 @@
 }
 /* Estilos para que parezca una pizarra como en las imágenes de la propuesta */
 body {
-    background-color: #333;
-    color: white;
-    font-family: sans-serif;
+    background-color: #333; /* Fondo gris oscuro / pizarra */
+    color: white; /* Texto claro */
+    font-family: Arial, sans-serif;
+    /* Asegura que los elementos HTML se centren */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+}
+
+.container {
+    background-color: #444; /* Contenedor ligeramente más claro */
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    width: 90%;
+    max-width: 900px;
 }
 
 /* Estilos para el Modal */
